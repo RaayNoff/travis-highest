@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Visualizer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: radial-gradient(circle, #1a1a2e, #16213e, #0f3460);
+        }
+        canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        button, input {
+            padding: 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+<canvas id="visualizer"></canvas>
+<canvas id="background"></canvas>
+<div class="controls">
+    <button id="play">Play</button>
+    <input type="range" id="seek" min="0" value="0" step="1">
+    <input type="range" id="volume" min="0" max="1" step="0.01" value="1">
+</div>
+<audio id="audio" src="highest-in-the-room.mp3"></audio>
+<script>
+    const audio = document.getElementById("audio");
+    const playButton = document.getElementById("play");
+    const seekBar = document.getElementById("seek");
+    const volumeControl = document.getElementById("volume");
+    const canvas = document.getElementById("visualizer");
+    const ctx = canvas.getContext("2d");
+    const bgCanvas = document.getElementById("background");
+    const bgCtx = bgCanvas.getContext("2d");
+
+    let audioCtx, analyser, source, dataArray;
+    let shapes = [];
+
+    function setupAudioContext() {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        source = audioCtx.createMediaElementSource(audio);
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        analyser.fftSize = 128;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+    }
+
+    function draw() {
+        requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(dataArray);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const barWidth = canvas.width / dataArray.length * 2;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const maxHeight = canvas.height * 0.6;
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, "#ff4b1f");
+        gradient.addColorStop(0.5, "#ff9068");
+        gradient.addColorStop(1, "#ff4b1f");
+
+        dataArray.forEach((value, i) => {
+            ctx.fillStyle = gradient;
+            const x = centerX + (i - dataArray.length / 2) * barWidth;
+            const height = (value / 255) * maxHeight;
+            ctx.fillRect(x, centerY - height / 2, barWidth - 2, height);
+        });
+    }
+
+    function createShapes() {
+        for (let i = 0; i < 500; i++) { // Увеличено количество фигур
+            shapes.push({
+                x: Math.random() * bgCanvas.width,
+                y: Math.random() * bgCanvas.height,
+                size: Math.random() * 50 + 10,
+                dx: (Math.random() - 0.5) * 1.5,
+                dy: (Math.random() - 0.5) * 1.5,
+                color: `rgba(${Math.random()*255}, ${Math.random()*255}, ${Math.random()*255}, 0.4)`
+            });
+        }
+    }
+
+    function drawBackground() {
+        requestAnimationFrame(drawBackground);
+        bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+        shapes.forEach(shape => {
+            shape.x += shape.dx;
+            shape.y += shape.dy;
+            if (shape.x < 0 || shape.x > bgCanvas.width) shape.dx *= -1;
+            if (shape.y < 0 || shape.y > bgCanvas.height) shape.dy *= -1;
+
+            bgCtx.fillStyle = shape.color;
+            bgCtx.beginPath();
+            bgCtx.arc(shape.x, shape.y, shape.size / 2, 0, Math.PI * 2);
+            bgCtx.fill();
+        });
+    }
+
+    playButton.addEventListener("click", () => {
+        if (!audioCtx) setupAudioContext();
+        if (audio.paused) {
+            audio.play();
+            playButton.textContent = "Pause";
+            draw();
+            drawBackground();
+        } else {
+            audio.pause();
+            playButton.textContent = "Play";
+        }
+    });
+
+    audio.addEventListener("timeupdate", () => {
+        seekBar.value = audio.currentTime;
+    });
+
+    audio.addEventListener("loadedmetadata", () => {
+        seekBar.max = audio.duration;
+    });
+
+    seekBar.addEventListener("input", () => {
+        audio.currentTime = seekBar.value;
+    });
+
+    volumeControl.addEventListener("input", () => {
+        audio.volume = volumeControl.value;
+    });
+
+    window.addEventListener("resize", () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        bgCanvas.width = window.innerWidth;
+        bgCanvas.height = window.innerHeight;
+    });
+
+    createShapes();
+    window.dispatchEvent(new Event("resize"));
+</script>
+</body>
+</html>
